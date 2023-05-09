@@ -3,7 +3,52 @@ from warnings import warn
 
 __all__ = ["KL_TDA_loss"]
 
-def KL_TDA_loss(H : torch.tensor,
+class KL_TDA_loss(torch.nn.Module):
+    
+    def __init__(self,
+                 n_states : int,
+                 target_centers : list or torch.tensor,
+                 target_sigmas : list or torch.tensor):
+        """Constructor.
+
+        Parameters
+        ----------
+        n_states : int
+            Number of states. The integer labels are expected to be in between 0
+            and ``n_states-1``.
+        target_centers : list or torch.Tensor
+            Shape ``(n_states, n_cvs)``. Centers of the Gaussian targets.
+        target_sigmas : list or torch.Tensor
+            Shape ``(n_states, n_cvs)``. Standard deviations of the Gaussian targets.
+        """
+        super().__init__()
+        self.n_states = n_states
+        self.target_centers = target_centers
+        self.target_sigmas = target_sigmas
+
+    def forward(self,
+                H: torch.Tensor,
+                labels: torch.Tensor) -> torch.Tensor:
+        """Compute the value of the loss function.
+
+        Parameters
+        ----------
+        H : torch.Tensor
+            Shape ``(n_batches, n_features)``. Output of the NN.
+        labels : torch.Tensor
+            Shape ``(n_batches,)``. Labels of the dataset.
+
+        Returns
+        -------
+        loss : torch.Tensor
+            Loss value.
+        loss_centers : torch.Tensor, optional
+            Only returned if ``return_loss_terms is True``. The value of the
+            loss term associated to the centers of the target Gaussians.
+        """
+        return kl_tda_loss(H, labels, self.n_states, self.target_centers, self.target_sigmas)
+
+def kl_tda_loss(H : torch.tensor,
             labels : torch.tensor,
             n_states : int,
             target_centers : list or torch.tensor,
@@ -25,10 +70,6 @@ def KL_TDA_loss(H : torch.tensor,
     target_sigmas : list or torch.tensor
         Standard deviations of the Gaussian targets
         Shape: (n_states, n_cvs)
-    alfa : float, optional
-        Centers_loss component prefactor, by default 1
-    beta : float, optional
-        Sigmas loss compontent prefactor, by default 100
 
     Returns
     -------

@@ -1,9 +1,8 @@
 import torch 
-import pytorch_lightning as pl
+import lightning as pl
 from mlcolvar.cvs import BaseCV
 from mlcolvar.core import FeedForward, Normalization
 from mlcolvar.core.loss.kl_tda_loss import KL_TDA_loss
-from mlcolvar.data import DictionaryDataModule
 
 __all__ = ["KL_DeepTDA_CV"]
 
@@ -13,7 +12,7 @@ class KL_DeepTDA_CV(BaseCV, pl.LightningModule):
     Combine the inputs with a neural-network and optimize it in a way such that the data are distributed accordingly to a target distribution.
     """
 
-    BLOCKS = ['normIn', 'nn']
+    BLOCKS = ['norm_in', 'nn']
 
     # TODO n_states optional?
     def __init__(self,
@@ -50,9 +49,17 @@ class KL_DeepTDA_CV(BaseCV, pl.LightningModule):
         """
 
         super().__init__(in_features=layers[0], out_features=layers[-1], **kwargs)
-
-        options = self.sanitize_options(options)
         
+        # =======   LOSS  =======
+        self.loss_fn = KL_TDA_loss(n_states=n_states,
+                                    target_centers=target_centers,
+                                    target_sigmas=target_sigmas,
+        )
+
+        # ======= OPTIONS ======= 
+        # parse and sanitize
+        options = self.parse_options(options)
+        # Save n_states        
         self.n_states = n_states
         if self.out_features != n_cvs:
             raise ValueError("Number of neurons of last layer should match the number of CVs!")
@@ -72,33 +79,22 @@ class KL_DeepTDA_CV(BaseCV, pl.LightningModule):
                 raise ValueError((f"Size of target_centers at dimension 1 should match the number of cvs! Expected {n_cvs} found {target_centers.shape[1]}"))
 
         # Initialize normIn
-        o = 'normIn'
-        if ( not options[o] ) and (options[o] is not None):
-            self.normIn = Normalization(self.in_features,**options[o])
+        o = 'norm_in'
+        if ( options[o] is not False ) and (options[o] is not None):
+            self.norm_in = Normalization(self.in_features,**options[o])
 
         # initialize NN
         o = 'nn'
         self.nn = FeedForward(layers, **options[o])
-    
-        self.loss_options = {'n_states': n_states,
-                             'target_centers': target_centers,
-                             'target_sigmas':  target_sigmas                     
-                            }
-
-    # TODO change to have standard signature?
-    def loss_function(self, input, labels, **kwargs):
-        loss = KL_TDA_loss(input, labels, **kwargs)
-        return loss
 
     def training_step(self, train_batch, batch_idx):
-        options = self.loss_options.copy()
         # =================get data===================
         x = train_batch['data']
         labels = train_batch['labels']
         # =================forward====================
         z = self.forward_cv(x)
         # ===================loss=====================
-        loss = self.loss_function(z, labels, **options)
+        loss = self.loss_fn(z, labels)
         # ====================log=====================+
         name = 'train' if self.training else 'valid'
         self.log(f'{name}_loss', loss, on_epoch=True,prog_bar=True, )
@@ -107,7 +103,8 @@ class KL_DeepTDA_CV(BaseCV, pl.LightningModule):
 # TODO signature of tests?
 import numpy as np
 def test_deeptda_cv():
-    from mlcvs.data import DictionaryDataset
+    from mlcolvar.data import DictDataset
+    from mlcolvar.data import DictModule
 
     for states_and_cvs in [  [1, 1]]:
         # get the number of states and cvs for the test run
@@ -136,8 +133,8 @@ def test_deeptda_cv():
         for i in range(1, n_states):
             y[samples*i:] += 1
         
-        dataset = DictionaryDataset({'data': X, 'labels' : y})
-        datamodule = DictionaryDataModule(dataset,lengths=[0.75,0.2,0.05], batch_size=samples)        
+        dataset = DictDataset({'data': X, 'labels' : y})
+        datamodule = DictModule(dataset,lengths=[0.75,0.2,0.05], batch_size=samples)        
         # train model
         trainer = pl.Trainer(accelerator='cpu', max_epochs=2, logger=None, enable_checkpointing=False)
         trainer.fit( model, datamodule )
