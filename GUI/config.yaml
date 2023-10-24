@@ -1,0 +1,16 @@
+cv:
+  name: DeepTDA
+  kwargs: 
+    mean: [-1,1]
+    std: [1,1]
+
+  getattr(mlcolvar.cvs,cv['name'])(**cv['cv_opt'])
+
+optim:
+  name:
+  
+
+
+d=dict()
+
+d.set_defaults()
