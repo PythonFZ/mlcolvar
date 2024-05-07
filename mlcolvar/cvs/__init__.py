@@ -3,6 +3,7 @@ __all__ = [
     "DeepLDA",
     "DeepTICA",
     "DeepTDA",
+    "KANDeepTDA",
     "AutoEncoderCV",
     "RegressionCV",
     "MultiTaskCV",
